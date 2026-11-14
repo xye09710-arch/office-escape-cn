@@ -14,6 +14,6 @@ export function choose(s,eventId,index) {
   for(const key of ['time','work','suspicion','fatigue']) next[key]=key==='time'?next[key]+d[key]:Math.max(0,Math.min(100,next[key]+d[key]));
   if(s.suspicion>=65) { next.time+=2; next.fatigue=Math.min(100,next.fatigue+2); }
   next.flags=[...new Set([...next.flags,...(option.flags || [])])];
-  next.storyKey=((s.storyKey||0)*31+index+1)>>>0; next.turn++; next.seen.push(event.id); next.history.push({title:event.title,choice:option.label,time:next.time});
+  next.storyKey=((s.storyKey||0)*31+index+1)>>>0; next.turn++; next.seen.push(event.id); next.history.push({eventId:event.id,index,title:event.title,choice:option.label,time:next.time});
   return next;
 }
