@@ -1,3 +1,4 @@
+import {DIFFICULTIES} from './rules.js';
 import { stageOf } from './state.js';
 import { events } from './events.js';
 export function availableEvents(s) { return events.filter(e => e.stage === stageOf(s.turn) && !s.seen.includes(e.id) && (!e.when || e.when(s))); }
@@ -9,6 +10,9 @@ export function choose(s,eventId,index) {
   if(!event || event.id!==eventId || !option || !unlocked(option,s)) throw new Error('当前选项不可用');
   const next=structuredClone(s);
   for(const [key,value] of Object.entries(option.effect || {})) next[key] = key==='time' ? next[key]+value : Math.max(0,Math.min(100,next[key]+value));
+  const d=DIFFICULTIES[s.difficulty];
+  for(const key of ['time','work','suspicion','fatigue']) next[key]=key==='time'?next[key]+d[key]:Math.max(0,Math.min(100,next[key]+d[key]));
+  if(s.suspicion>=65) { next.time+=2; next.fatigue=Math.min(100,next.fatigue+2); }
   next.flags=[...new Set([...next.flags,...(option.flags || [])])];
   next.storyKey=((s.storyKey||0)*31+index+1)>>>0; next.turn++; next.seen.push(event.id); next.history.push({title:event.title,choice:option.label,time:next.time});
   return next;
