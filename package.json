@@ -1,0 +1,17 @@
+{
+  "name": "office-escape-cn",
+  "version": "1.0.0",
+  "description": "中文办公室逃脱游戏，当前仅完成项目初始化",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xye09710-arch/office-escape-cn.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/xye09710-arch/office-escape-cn/issues"
+  },
+  "homepage": "https://github.com/xye09710-arch/office-escape-cn#readme",
+  "private": true
+}
