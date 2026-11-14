@@ -1,0 +1,1 @@
+export const events = [{id:'demo', stage:0, title:'五点整，群消息响了', text:'你刚准备收尾，老板发来一句：“今天的进度同步一下？”', options:[{label:'把完成项整理成三行',hint:'花点时间，减少误会',effect:{time:4,work:8,suspicion:-5}},{label:'先把手头任务做完',hint:'推进工作，但暂时没回消息',effect:{time:6,work:13,suspicion:5}},{label:'问同事有没有汇总模板',hint:'欠个人情，省一点力气',effect:{time:3,work:5,relation:5}}]}];

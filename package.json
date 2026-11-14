@@ -8,10 +8,20 @@
   },
   "keywords": [],
   "author": "",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/xye09710-arch/office-escape-cn/issues"
   },
   "homepage": "https://github.com/xye09710-arch/office-escape-cn#readme",
-  "private": true
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "vite": "^8.3.8"
+  }
 }
