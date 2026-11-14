@@ -26,3 +26,7 @@ id_ed25519
 *.log
 .DS_Store
 Thumbs.db
+
+# 浏览器测试产物
+test-results/
+playwright-report/
