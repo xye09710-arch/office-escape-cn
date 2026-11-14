@@ -1,128 +1,209 @@
+import { pendingTasks, completion } from "./tasks.js";
 export const DIFFICULTIES = {
   easy: {
     name: "简单",
-    note: "任务少一点，同事好说话",
-    time: 0,
-    work: 1,
-    suspicion: -1,
-    fatigue: -1,
-    delay: 0,
+    note: "日报好核，临时活少，搭子也有空",
+    ppt: 4,
+    analysis: 4,
+    workPace: 1,
+    meeting: 4,
+    load: -8,
   },
   normal: {
     name: "普通",
-    note: "熟悉的工作日，熟悉的临时需求",
-    time: 0,
-    work: 0,
-    suspicion: 0,
-    fatigue: 0,
-    delay: 4,
+    note: "偶尔加戏，还能商量着来",
+    ppt: 6,
+    analysis: 6,
+    workPace: 1,
+    meeting: 7,
+    load: 0,
   },
   hard: {
     name: "困难",
-    note: "沟通成本增加，领导盯得更紧",
-    time: 1,
-    work: 0,
-    suspicion: 2,
-    fatigue: 1,
-    delay: 9,
+    note: "多查一轮，临时会也长一点",
+    ppt: 9,
+    analysis: 9,
+    workPace: 1.3,
+    meeting: 11,
+    load: 7,
   },
   hell: {
     name: "地狱",
-    note: "每件事都很急，精力掉得更快",
-    time: 2,
-    work: -1,
-    suspicion: 3,
-    fatigue: 2,
-    delay: 15,
+    note: "改稿量翻倍，救场前先看谁有空",
+    ppt: 12,
+    analysis: 12,
+    workPace: 1.6,
+    meeting: 16,
+    load: 13,
   },
 };
 export const ENDINGS = {
   ontime: {
     name: "准点下班，理直气壮",
-    text: "交付有凭据，交接有人接。你按下电梯，今晚的第一口饭终于不用对着电脑吃。",
+    text: "今天该交的已经交了，该挪到明天的也谈妥了。你刷开门禁，晚高峰还没完全堵起来。",
   },
   team: {
     name: "组队撤离成功",
-    text: "你们互相补过的坑，变成了今天一起离开的底气。电梯里没有人再问“还有事吗”。",
+    text: "你们把各自的尾巴收干净，真的在同一班电梯碰了头。今晚不聊工作，先研究吃什么。",
   },
   late: {
     name: "晚了一点，也算赢",
-    text: "临时需求多绕了几圈，你还是把工作留在了工位上。街边的煎饼摊还没收。",
+    text: "该补的都补完了，虽然晚了一会儿，好在没把电脑带回家。楼下的煎饼摊还亮着灯。",
   },
   caught: {
     name: "门口被叫回",
-    text: "“你等一下。”熟悉的声音在身后响起。没说清的消息，最后都变成了返工。",
+    text: "手机响了，确实还有一处没交代清楚。你回工位把任务和交接重新说清，确认对方接下，才第二次刷开门禁。",
   },
   unfinished: {
     name: "尾款是加班",
-    text: "人差点走了，任务还没走。欠下的收尾不会凭空消失，只好再打开那张表。",
+    text: "答应的活还有尾巴，也没人接手。你把它们逐项做完再走，今晚的饭只能往后推了。",
   },
   burnout: {
     name: "工位续费成功",
-    text: "你接住了所有人的急活，却没给自己留电量。屏幕还亮着，脑子已经开始转圈。",
+    text: "这会儿连核对页码都得看两遍。等最后的任务和交接都有了去处，你才拎起包，办公室已经安静了。",
   },
 };
-export function outcome(s) {
-  if (s.turn !== 18) throw new Error("完成十八次决策后才能结算");
-  const extra =
-    Math.ceil(Math.max(0, 85 - s.work) * 1.4) +
-    Math.ceil(Math.max(0, s.suspicion - 45) * 0.8) +
-    Math.ceil(Math.max(0, s.fatigue - 65) * 0.5);
-  const time = s.time + extra;
-  const id =
-    s.fatigue >= 85
-      ? "burnout"
-      : s.work < 70
-        ? "unfinished"
-        : s.suspicion >= 65
-          ? "caught"
-          : s.relation >= 80
-            ? "team"
-            : time <= 1080
-              ? "ontime"
-              : "late";
-  const d = DIFFICULTIES[s.difficulty];
-  const coworkers = [
+export function coworkerTimes(s) {
+  const load = DIFFICULTIES[s.difficulty].load;
+  return [
     {
+      id: "lin",
       name: "小林",
       personality: "热心搭子",
-      time:
-        1083 +
-        d.delay -
-        Math.floor(s.relation / 12) +
-        (s.flags.includes("allyDone") ? -5 : 4),
+      time: s.coworkerReadyAt?.lin ?? 1070 + load + s.coworkerLoad.lin,
     },
     {
+      id: "zhou",
       name: "小周",
       personality: "踩点达人",
-      time: 1075 + d.delay + (s.flags.includes("slack") ? 5 : 0),
+      time:
+        s.coworkerReadyAt?.zhou ??
+        1077 + Math.max(0, (load / 2) | 0) + s.coworkerLoad.zhou,
     },
     {
+      id: "chen",
       name: "小陈",
       personality: "细节控",
-      time: 1100 + d.delay + (s.work < 70 ? 8 : -4),
+      time: s.coworkerReadyAt?.chen ?? 1088 + load + s.coworkerLoad.chen,
     },
     {
+      id: "wang",
       name: "老王",
       personality: "稳稳收尾",
-      time: 1090 + d.delay + (s.flags.includes("evidenceDone") ? -8 : 5),
+      time: s.coworkerReadyAt?.wang ?? 1082 + load + s.coworkerLoad.wang,
     },
   ];
+}
+export function outcome(s) {
+  if (s.turn !== 18) throw new Error("完成十八次决策后才能结算");
+  const d = DIFFICULTIES[s.difficulty],
+    open = pendingTasks(s);
+  const breakdown = open.map((t) => ({
+    id: t.id,
+    title: t.title,
+    minutes: Math.ceil(t.remaining * d.workPace),
+    reason: "答应的任务尚未完成，离开前补齐",
+  }));
+  if (s.facts.callback && !s.facts.callbackResolved)
+    breakdown.push({
+      id: "callback",
+      title: "回工位补交接",
+      minutes: 5,
+      reason: s.facts.callbackReason,
+    });
+  if (s.facts.unresolvedDelivery && !s.facts.callback)
+    breakdown.push({
+      id: "delivery",
+      title: "补发并确认文件",
+      minutes: 4,
+      reason: "文件尚未确认收到",
+    });
+  const tired =
+    s.fatigue >= 65 &&
+    s.time + breakdown.reduce((n, b) => n + b.minutes, 0) >= 1110;
+  if (tired)
+    breakdown.push({
+      id: "recheck",
+      title: "疲劳后的复核",
+      minutes: 8,
+      reason: "眼花漏看了两处，逐项复核后才交付",
+    });
+  const workTime = s.time + breakdown.reduce((n, b) => n + b.minutes, 0);
+  const coworkers = coworkerTimes(s);
+  const partner = s.facts.leaveTogether
+    ? coworkers.find((p) => p.id === s.facts.partner)
+    : null;
+  const team = Boolean(
+    partner &&
+    !s.facts.callback &&
+    open.length === 0 &&
+    !s.facts.unresolvedDelivery,
+  );
+  const time = team ? Math.max(workTime, partner.time) : workTime;
+  if (team && time > workTime)
+    breakdown.push({
+      id: "wait",
+      title: `等${partner.name}一起走`,
+      minutes: time - workTime,
+      reason: "约好了同一班电梯，不是各走各的",
+    });
+  if (team) partner.time = time;
+  const id = tired
+    ? "burnout"
+    : s.facts.callback
+      ? "caught"
+      : open.length && time > 1080
+        ? "unfinished"
+        : team
+          ? "team"
+          : time <= 1080
+            ? "ontime"
+            : "late";
   const ranking = [
-    { name: "你", personality: "今天也辛苦了", time, player: true },
+    {
+      id: "player",
+      name: "你",
+      personality: "今天也辛苦了",
+      time,
+      player: true,
+    },
     ...coworkers,
   ]
     .sort((a, b) => a.time - b.time)
-    .map((p, i, all) => ({
+    .map((p, i, a) => ({
       ...p,
-      rank: all.findIndex((x) => x.time === p.time) + 1,
+      rank: a.findIndex((x) => x.time === p.time) + 1,
     }));
+  const settledTasks = s.tasks.map((t) =>
+    t.status === "pending"
+      ? {
+          ...t,
+          remaining: 0,
+          status: "completed",
+          agreement: "结算时按账本余量补完",
+          settledInEnding: true,
+        }
+      : structuredClone(t),
+  );
+  const departureStats = {
+    work: completion(settledTasks),
+    suspicion: s.suspicion,
+    relation: s.relation,
+    fatigue: Math.min(
+      100,
+      s.fatigue + open.reduce((n, t) => n + t.remaining, 0),
+    ),
+  };
   return {
     id,
     ...ENDINGS[id],
     time,
-    extra,
+    extra: time - s.time,
+    breakdown,
     ranking,
     rank: ranking.find((p) => p.player).rank,
+    settledTasks,
+    departureStats,
+    evidenceCount: s.history.filter((h) => h.tags.includes("evidence")).length,
   };
 }

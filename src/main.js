@@ -3,6 +3,7 @@ import { createState, clock, STAGES, stageOf, COUNTS } from "./state.js";
 import { currentEvent, choose, unlocked } from "./engine.js";
 import { DIFFICULTIES, outcome } from "./rules.js";
 import { cards, earnedCards } from "./achievements.js";
+import { pendingTasks } from "./tasks.js";
 import { load, persist } from "./storage.js";
 const app = document.querySelector("#app");
 let storage;
@@ -59,24 +60,53 @@ function home() {
       "",
     )}</div><div class="actions">${button("start", "打卡，开始今天 →", "primary")}${profile.session ? button("resume", profile.session.turn === 18 ? "查看上次战绩" : `继续上次 · 已选 ${profile.session.turn}/18 题`, "secondary") : ""}</div><p class="fine">选择会改变进度、人情与后续剧情。每次选择自动保存，不限时，不用注册。</p>${profile.session && profile.session.turn < 18 ? '<p class="fine">开始新一局会替换当前进度，已收藏的卡牌会保留。</p>' : ""}</section><div class="home-bottom"><p>你不是一个人在等六点。<br><small>小林热心、小周踩点、小陈抠细节、老王稳收尾。</small></p>${button("gallery", `翻翻成就图鉴 · ${profile.cards.length}/14`, "secondary")}</div>`;
 }
-function stats() {
+function stats(values = state) {
   return `<div class="stats">${[
-    ["work", "工作完成度", "交付越充分，收尾越少"],
-    ["suspicion", "老板怀疑值", "太高会增加追问与返工"],
+    ["work", "工作完成度", "只计算真正做完的内容"],
+    ["suspicion", "老板怀疑值", "追问能否说清，还看事实和证据"],
     ["relation", "同事关系", "影响互助与条件选项"],
-    ["fatigue", "疲劳值", "太累会增加收尾耗时"],
+    ["fatigue", "疲劳值", "太累时干活会慢，休息能恢复"],
   ]
     .map(
       ([key, name, hint]) =>
-        `<div class="stat ${key}"><div><span>${name}</span><strong>${state[key]}<small>/100</small></strong></div><progress max="100" value="${state[key]}" aria-label="${name}"></progress><small>${hint}</small></div>`,
+        `<div class="stat ${key}"><div><span>${name}</span><strong>${values[key]}<small>/100</small></strong></div><progress max="100" value="${values[key]}" aria-label="${name}"></progress><small>${hint}</small></div>`,
     )
     .join("")}</div>`;
+}
+function feedback() {
+  const h = state.history.at(-1);
+  if (!h) return "";
+  const names = {
+    time: "耗时",
+    work: "完成度",
+    relation: "关系",
+    suspicion: "怀疑",
+    fatigue: "疲劳",
+  };
+  return `<section class="feedback" role="status" aria-live="polite"><strong>刚才发生了什么</strong><p>${esc(h.feedback)}</p><div class="feedback-deltas">${Object.entries(
+    h.delta,
+  )
+    .filter(([, v]) => v !== 0)
+    .map(
+      ([k, v]) =>
+        `<span>${names[k]} ${v > 0 ? "+" : ""}${v}${k === "time" ? " 分钟" : ""}</span>`,
+    )
+    .join("")}</div></section>`;
+}
+function taskList(tasks = state.tasks, final = false) {
+  const status = {
+    pending: "待处理",
+    completed: "已完成",
+    deferred: "已约明早",
+    delegated: "已有人接手",
+  };
+  return `<details class="task-list"><summary>手头的事 · ${tasks.filter((t) => t.status === "pending").length} 项待处理${final ? " · 离开时" : ""}</summary><ul>${tasks.map((t) => `<li><strong>${esc(t.title)}</strong><span>${status[t.status]}${t.status === "pending" ? ` · 正常速度还需约 ${t.remaining} 分钟` : ""}</span>${t.agreement ? `<small>${esc(t.agreement)}</small>` : ""}</li>`).join("")}</ul><p class="fine">改期和交接会保留约定，不会假装成已经做完；结算会列出最后补掉的内容。</p></details>`;
 }
 function game() {
   const e = currentEvent(state),
     stage = stageOf(state.turn),
     offset = [0, 4, 9, 14][stage];
-  return `<div class="game-header"><div><p class="eyebrow">${DIFFICULTIES[state.difficulty].name}模式 · 下班倒计时</p><strong class="time">${clock(state.time)}</strong></div><div class="turn-count"><b>${state.turn + 1}</b> / 18 次决策<p>当前阶段 ${state.turn - offset + 1} / ${COUNTS[stage]}</p></div></div><div class="stages">${STAGES.map((s, i) => `<div class="${stage === i ? "active" : stage > i ? "done" : ""}"><span>0${i + 1}</span>${s}</div>`).join("")}</div>${stats()}<div class="play-layout"><article class="event" aria-labelledby="event-title"><div class="event-top"><span class="pill">${e.hidden ? "隐藏事件" : e.route ? "分支回响" : "职场现场"}</span><span>${STAGES[stage]}</span></div><h1 id="event-title" tabindex="-1">${e.title}</h1><p class="event-text">${e.text}</p><p class="choice-prompt">你打算怎么接这一招？</p><div class="choices">${e.options.map((o, i) => `<button class="choice" data-choice="${i}" ${unlocked(o, state) ? "" : "disabled"}><span class="choice-number">${["甲", "乙", "丙", "丁"][i]}</span><span><strong>${o.label}</strong><small>${unlocked(o, state) ? o.hint : `尚未解锁：${o.locked}`}</small></span><span class="choice-arrow">↗</span></button>`).join("")}</div><p class="fine">没有标准答案。多做、巧做、借力，都有各自的代价。</p></article><aside>${scene()}<details class="history"><summary>决策记录 · ${state.history.length} 条</summary>${state.history.length ? `<ol>${state.history.map((h) => `<li><time>${clock(h.time)}</time><strong>${esc(h.title)}</strong><p>${esc(h.choice)}</p></li>`).join("")}</ol>` : "<p>今天的故事，从这一题开始。</p>"}</details></aside></div>${button("exit", "保存并返回首页", "text-button")}`;
+  return `<div class="game-header"><div><p class="eyebrow">${DIFFICULTIES[state.difficulty].name}模式 · 下班倒计时</p><strong class="time">${clock(state.time)}</strong></div><div class="turn-count"><b>${state.turn + 1}</b> / 18 次决策<p>当前阶段 ${state.turn - offset + 1} / ${COUNTS[stage]}</p></div></div><div class="stages">${STAGES.map((s, i) => `<div class="${stage === i ? "active" : stage > i ? "done" : ""}"><span>0${i + 1}</span>${s}</div>`).join("")}</div>${stats()}${feedback()}${taskList()}<div class="play-layout"><article class="event" aria-labelledby="event-title"><div class="event-top"><span class="pill">${e.hidden ? "隐藏事件" : e.because?.length ? "事情有了下文" : "职场现场"}</span><span>${STAGES[stage]}</span></div><h1 id="event-title" tabindex="-1">${e.title}</h1><p class="event-text">${e.text}</p><p class="choice-prompt">你打算怎么接这一招？</p><div class="choices">${e.options.map((o, i) => `<button class="choice" data-choice="${i}" data-option="${o.id}" ${unlocked(o, state) ? "" : "disabled"}><span class="choice-number">${["甲", "乙", "丙", "丁"][i]}</span><span><strong>${o.label}</strong><small>${unlocked(o, state) ? o.hint : `尚未解锁：${o.locked}`}</small></span><span class="choice-arrow">↗</span></button>`).join("")}</div><p class="fine">没有标准答案。多做、巧做、借力，都有各自的代价。</p></article><aside>${scene()}<details class="history"><summary>决策记录 · ${state.history.length} 条</summary>${state.history.length ? `<ol>${state.history.map((h) => `<li><time>${clock(h.time)}</time><strong>${esc(h.title)}</strong><p>${esc(h.choice)}</p><p class="history-feedback">${esc(h.feedback)}</p></li>`).join("")}</ol>` : "<p>今天的故事，从这一题开始。</p>"}</details></aside></div>${button("exit", "保存并返回首页", "text-button")}`;
 }
 function results() {
   const r = outcome(state);
@@ -88,7 +118,7 @@ function results() {
     )
     .join(
       "",
-    )}</div>${button("gallery", "查看完整图鉴", "secondary")}</section></div>${stats()}<details class="history"><summary>回看今天的 18 次选择</summary><ol>${state.history.map((h) => `<li><time>${clock(h.time)}</time><strong>${esc(h.title)}</strong><p>${esc(h.choice)}</p></li>`).join("")}</ol></details><div class="actions">${button("share", "复制战绩，喊同事来比比", "primary")}${button("back", "再过一个工作日", "secondary")}</div><p id="share-notice" role="status">${notice}</p><textarea id="share-fallback" class="share-fallback" readonly aria-label="可复制的战绩" hidden></textarea>`;
+    )}</div>${button("gallery", "查看完整图鉴", "secondary")}</section></div>${stats(r.departureStats)}${feedback()}${taskList(r.settledTasks, true)}${r.breakdown.length ? `<details class="history settlement"><summary>实际收尾与等待 · ${r.extra} 分钟</summary><ul>${r.breakdown.map((b) => `<li><strong>${esc(b.title)} · ${b.minutes} 分钟</strong><p>${esc(b.reason)}</p></li>`).join("")}</ul></details>` : ""}<details class="history"><summary>回看今天的 18 次选择</summary><ol>${state.history.map((h) => `<li><time>${clock(h.time)}</time><strong>${esc(h.title)}</strong><p>${esc(h.choice)}</p><p class="history-feedback">${esc(h.feedback)}</p></li>`).join("")}</ol></details><div class="actions">${button("share", "复制战绩，喊同事来比比", "primary")}${button("back", "再过一个工作日", "secondary")}</div><p id="share-notice" role="status">${notice}</p><textarea id="share-fallback" class="share-fallback" readonly aria-label="可复制的战绩" hidden></textarea>`;
 }
 function render() {
   app.innerHTML = `<nav><a href="#" id="brand">▦ 下班事务所</a><button id="nav-gallery" class="nav-button">成就图鉴 <span>${profile.cards.length}/14</span></button></nav><main>${warning ? `<p class="warning" role="status">${warning}</p>` : ""}${view === "gallery" ? gallery() : view === "game" ? game() : view === "result" ? results() : home()}</main><footer>今天必须准时下班 · 工作留在工位，生活带回家</footer>`;
@@ -149,7 +179,7 @@ function render() {
   );
   on("share", async () => {
     const r = outcome(state),
-      text = `《今天必须准时下班》\n${r.name}\n${DIFFICULTIES[state.difficulty].name}模式 · ${clock(r.time)}下班 · 第${r.rank}名\n完成度${state.work}，关系${state.relation}，疲劳${state.fatigue}\n18次选择，你能比我早走吗？`;
+      text = `《今天必须准时下班》\n${r.name}\n${DIFFICULTIES[state.difficulty].name}模式 · ${clock(r.time)}下班 · 第${r.rank}名\n完成度${r.departureStats.work}，关系${state.relation}，疲劳${r.departureStats.fatigue}\n18次选择，你能比我早走吗？`;
     try {
       await navigator.clipboard.writeText(text);
       document.getElementById("share-notice").textContent =

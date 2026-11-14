@@ -1,40 +1,91 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createState } from "../src/state.js";
-import { choose, currentEvent, unlocked } from "../src/engine.js";
-import { load, persist } from "../src/storage.js";
+import { load, persist, restoreState } from "../src/storage.js";
 import { cards, earnedCards } from "../src/achievements.js";
-import { outcome, DIFFICULTIES } from "../src/rules.js";
-const memory = () => {
-  let value = null;
-  return {
-    getItem: () => value,
-    setItem: (k, v) => {
-      value = v;
-    },
-  };
-};
-test("存档可重放续玩，重复结算不重复计数", () => {
-  const store = memory();
-  let p = load(store).profile,
-    s = createState();
-  for (let i = 0; i < 9; i++) s = choose(s, currentEvent(s).id, 0);
-  p = persist(store, p, s).profile;
-  assert.deepEqual(load(store).profile.session, s);
-  for (let i = 9; i < 18; i++) s = choose(s, currentEvent(s).id, 0);
-  p = persist(store, p, s).profile;
-  assert.equal(p.runs, 1);
-  p = persist(store, p, s).profile;
-  assert.equal(p.runs, 1);
-  assert.ok(p.cards.includes("first"));
-  assert.deepEqual(load(store).profile.cards, p.cards);
+import { outcome } from "../src/rules.js";
+import { paths, play } from "./helpers.js";
+const memory = (value = null) => ({
+  getItem() {
+    return value;
+  },
+  setItem(k, v) {
+    value = v;
+  },
 });
-test("损坏存档和存储禁用时有明确提示", () => {
-  assert.ok(load({ getItem: () => "{bad" }).warning);
+test("事实、任务、人情、即时反馈都可准确续玩，结算不重复计数", () => {
+  const { state: s, states } = play(paths.earlyNormal),
+    store = memory();
+  let p = load(store).profile;
+  p = persist(store, p, states[9]).profile;
+  assert.deepEqual(load(store).profile.session, states[9]);
+  p = persist(store, p, s).profile;
+  assert.equal(p.runs, 1);
+  assert.equal(persist(store, p, s).profile.runs, 1);
+  assert.deepEqual(load(store).profile.session, s);
+});
+test("十四张卡都有确定条件与固定可达路径；不会提前解锁", () => {
+  assert.equal(cards.length, 14);
+  for (const c of cards) {
+    const { state: s } = play(paths["card-" + c.id]);
+    assert.ok(earnedCards(s, outcome(s)).includes(c.id));
+    assert.deepEqual(earnedCards(s, outcome(s)), earnedCards(s, outcome(s)));
+    assert.ok(c.rule.length > 5);
+  }
+  assert.deepEqual(earnedCards(createState(), {}), []);
+});
+test("旧版进度留档，已有收藏、结局与局数保留，开始新局后仍保留旧档", () => {
+  const legacy = { version: 2, turn: 9, runId: "old-game", history: [] };
+  const store = memory(
+    JSON.stringify({
+      version: 2,
+      cards: ["first", "team"],
+      endings: ["team"],
+      runs: 2,
+      session: legacy,
+    }),
+  );
+  const loaded = load(store);
+  assert.match(loaded.warning, /旧局已留档/);
+  assert.equal(loaded.profile.session, null);
+  assert.deepEqual(loaded.profile.cards, ["first", "team"]);
+  assert.deepEqual(loaded.profile.legacySession, legacy);
+  const saved = persist(store, loaded.profile, createState());
+  assert.deepEqual(load(store).profile.legacySession, legacy);
+  assert.equal(saved.profile.runs, 2);
+});
+test("损坏当前局不会删除收藏；篡改的事件和选项拒绝重放", () => {
+  const { state: s } = play(paths.team),
+    bad = structuredClone(s);
+  bad.history[0].optionId = "not-an-option";
+  assert.throws(() => restoreState(bad));
+  const store = memory(
+    JSON.stringify({
+      version: 3,
+      cards: ["first"],
+      runs: 1,
+      endings: ["ontime"],
+      session: bad,
+    }),
+  );
+  const loaded = load(store);
+  assert.ok(loaded.warning);
+  assert.deepEqual(loaded.profile.cards, ["first"]);
+  assert.deepEqual(loaded.profile.recoverySession, bad);
+  assert.equal(loaded.profile.session, null);
+});
+test("存储不可用有提示，不会假装保存成功", () => {
+  assert.ok(
+    load({
+      getItem() {
+        throw Error();
+      },
+    }).warning,
+  );
   assert.ok(
     persist(
       {
-        setItem: () => {
+        setItem() {
           throw Error();
         },
       },
@@ -42,29 +93,4 @@ test("损坏存档和存储禁用时有明确提示", () => {
       createState(),
     ).warning,
   );
-});
-test("14张成就均有确定条件且能够真实解锁", () => {
-  assert.equal(cards.length, 14);
-  const earned = new Set();
-  for (const d of Object.keys(DIFFICULTIES))
-    for (let seed = 1; seed <= 1503; seed++) {
-      let s = createState(d),
-        r = seed;
-      for (let i = 0; i < 18; i++) {
-        const e = currentEvent(s),
-          opts = e.options
-            .map((o, i) => (unlocked(o, s) ? i : -1))
-            .filter((i) => i >= 0);
-        r = (r * 1664525 + 1013904223) >>> 0;
-        s = choose(
-          s,
-          e.id,
-          opts[seed > 1500 ? (seed - 1501) % opts.length : r % opts.length],
-        );
-      }
-      const a = earnedCards(s, outcome(s));
-      assert.deepEqual(a, earnedCards(s, outcome(s)));
-      a.forEach((id) => earned.add(id));
-    }
-  assert.deepEqual([...earned].sort(), cards.map((c) => c.id).sort());
 });

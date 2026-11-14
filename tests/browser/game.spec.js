@@ -33,6 +33,11 @@ test("完整18题、刷新续玩、排名、图鉴和分享", async ({ page }, i
       await page.getByRole("button", { name: "继续上次" }).click();
       await expect(page.locator(".turn-count b")).toHaveText("9");
     }
+    if (i === 1)
+      await page.screenshot({
+        path: `/tmp/office-feedback-${info.project.name}.png`,
+        fullPage: true,
+      });
     if (i === 0)
       await page.screenshot({
         path: `/tmp/office-play-${info.project.name}.png`,
@@ -68,4 +73,64 @@ test("四档难度均能在界面通关", async ({ page }) => {
       await page.locator("[data-choice]:not([disabled])").first().click();
     await expect(page.locator(".rank-row")).toHaveCount(5);
   }
+});
+
+test("固定的提前下班与明显加班路线，逐题显示反馈并保持最终时间一致", async ({
+  page,
+}) => {
+  const { paths } = await import("../helpers.js");
+  for (const name of ["earlyNormal", "burnout"]) {
+    const path = paths[name];
+    await page.goto("/");
+    await page
+      .locator(`input[value="${path.difficulty}"]`)
+      .check({ force: true });
+    await page.getByRole("button", { name: "打卡，开始今天" }).click();
+    for (const [i, id] of path.choices.entries()) {
+      await page.locator(`[data-option="${id}"]`).click();
+      await expect(page.locator(".feedback")).toContainText("刚才发生了什么");
+      await expect(page.locator(".feedback p")).not.toBeEmpty();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBeTruthy();
+      if (i === 10) {
+        const before = await page.locator(".feedback p").textContent();
+        await page.reload();
+        await page.getByRole("button", { name: "继续上次" }).click();
+        await expect(page.locator(".feedback p")).toHaveText(before);
+      }
+    }
+    await expect(
+      page.locator(".result-numbers>div").first().locator("strong"),
+    ).toHaveText(
+      `${String(Math.floor(path.time / 60)).padStart(2, "0")}:${String(path.time % 60).padStart(2, "0")}`,
+    );
+    await expect(page.locator(".result-heading h1")).toContainText(
+      name === "earlyNormal" ? "准点下班" : "工位续费",
+    );
+    await page.locator(".task-list summary").click();
+    await expect(page.locator(".task-list")).toContainText("0 项待处理");
+  }
+});
+
+test("升级旧局时保留卡牌并提示重新开局", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "office-escape-v2",
+      JSON.stringify({
+        version: 2,
+        cards: ["first", "team"],
+        runs: 2,
+        endings: ["team"],
+        session: { version: 2, turn: 8, runId: "legacy", history: [] },
+      }),
+    ),
+  );
+  await page.goto("/");
+  await expect(page.locator(".warning")).toContainText("旧局已留档");
+  await expect(page.locator("#resume")).toHaveCount(0);
+  await page.locator("#nav-gallery").click();
+  await expect(page.locator(".collected")).toHaveCount(2);
 });

@@ -69,7 +69,7 @@ export const cards = [
     rarity: "稀有",
     icon: "章",
     rule: "完成度100且怀疑值不高于20",
-    test: (s) => s.work === 100 && s.suspicion <= 20,
+    test: (s, r) => r.departureStats.work === 100 && s.suspicion <= 20,
   },
   {
     id: "friends",
@@ -85,7 +85,8 @@ export const cards = [
     rarity: "稀有",
     icon: "电",
     rule: "疲劳不高于20且完成度至少85",
-    test: (s) => s.fatigue <= 20 && s.work >= 85,
+    test: (s, r) =>
+      r.departureStats.fatigue <= 20 && r.departureStats.work >= 85,
   },
   {
     id: "secret",
@@ -93,15 +94,16 @@ export const cards = [
     rarity: "稀有",
     icon: "钥",
     rule: "触发并完成至少一个隐藏事件",
-    test: (s) => s.seen.some((id) => id.startsWith("hidden-")),
+    test: (s) => s.history.some((h) => h.tags.includes("hidden")),
   },
   {
     id: "evidence",
     name: "聊天记录战神",
     rarity: "稀有",
     icon: "证",
-    rule: "完成至少两个证据链事件",
-    test: (s) => s.seen.filter((id) => id.startsWith("evidence-")).length >= 2,
+    rule: "至少两次留下或核实具体交付证据",
+    test: (s) =>
+      s.history.filter((h) => h.tags.includes("evidence")).length >= 2,
   },
   {
     id: "hell",
@@ -109,7 +111,8 @@ export const cards = [
     rarity: "珍藏",
     icon: "焰",
     rule: "地狱难度完成度至少85且不晚于19:00下班",
-    test: (s, r) => s.difficulty === "hell" && s.work >= 85 && r.time <= 1140,
+    test: (s, r) =>
+      s.difficulty === "hell" && r.departureStats.work >= 85 && r.time <= 1140,
   },
 ];
 export function earnedCards(s, r) {
